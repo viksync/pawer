@@ -49,20 +49,37 @@ struct SettingsView: View {
                     if !tgBinding.isLinked {
                         HStack {
                             Spacer()
-                            Link("Connect Telegram", destination: TgBinding.shared.botLinkURL!)
-                                .font(.headline)
-                                .disabled(!isTelegramEnabled)
+
+                            switch tgBinding.connectionState {
+                                case .idle:
+                                    Button("Connect Telegram") { tgBinding.connectTelegram() }
+                                case .waitingForTelegram:
+                                    VStack {
+                                        ProgressView()
+                                        .scaleEffect(0.6)
+                                        Text("Click the link and then Start button in bot")
+
+                                        Link("Open Telegram", destination: TgBinding.shared.botLinkURL!)
+                                        .font(.headline)
+                                        .disabled(!isTelegramEnabled)
+                                    }
+                                case .failed:
+                                    VStack {
+                                        Text("Connection failed")
+                                        Button("Try again") { tgBinding.connectTelegram() }
+                                    }
+                            }
                             Spacer()
                         }
                         .opacity(isTelegramEnabled ? 1.0 : 0.5)
                     } else {
                         HStack {
                             Spacer()
-                            Button("Unlink") {
+                            Button("Unlink Account") {
                                 //TODO: create unlink method in TgBingind
                             }
                             .buttonStyle(.bordered)
-                            .controlSize(.large)
+                            .controlSize(.regular)
                             .disabled(!isTelegramEnabled)
                             Spacer()
                         }
