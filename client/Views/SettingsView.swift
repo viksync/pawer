@@ -1,13 +1,12 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @StateObject private var tgBinding = TgBinding.shared
     @Binding var showSettings: Bool
 
     @AppStorage("pollingInterval") private var pollingInterval: Double = BatteryMonitor
         .defaultPollingInterval
-
-    @State private var telegramEnabled: Bool = false
-    @State private var telegramIsLinked: Bool = false
+    @AppStorage("isTelegramEnabled") private var isTelegramEnabled: Bool = true
 
     var body: some View {
         VStack {
@@ -40,43 +39,40 @@ struct SettingsView: View {
                 GroupBox(label: Text("")) {
                     HStack {
                         Spacer()
-                        Toggle("Notify in Telegram", isOn: $telegramEnabled)
+                        Toggle("Notify in Telegram", isOn: $isTelegramEnabled)
                             .toggleStyle(SwitchToggleStyle())
                             .controlSize(.small)
                         Spacer()
                     }
                     .padding([.top, .bottom], 5)
 
-                    if !telegramIsLinked {
+                    if !tgBinding.isLinked {
                         HStack {
                             Spacer()
-                            Link("Connect Telegram", destination: URL(string: "https://t.me/your_bot")!)
+                            Link("Connect Telegram", destination: TgBinding.shared.botLinkURL!)
                                 .font(.headline)
-                                .disabled(!telegramEnabled)
+                                .disabled(!isTelegramEnabled)
                             Spacer()
                         }
-                        .opacity(telegramEnabled ? 1.0 : 0.5)
+                        .opacity(isTelegramEnabled ? 1.0 : 0.5)
                     } else {
                         HStack {
                             Spacer()
                             Button("Unlink") {
-                                self.telegramIsLinked = false
+                                //TODO: create unlink method in TgBingind
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.large)
-                            .disabled(!telegramEnabled)
+                            .disabled(!isTelegramEnabled)
                             Spacer()
                         }
                         .padding(.bottom, 5)
-                        .opacity(telegramEnabled ? 1.0 : 0.5)
+                        .opacity(isTelegramEnabled ? 1.0 : 0.5)
                     }
                 }
             }
             .padding(.bottom, 20)
         }
         .padding([.leading, .trailing], 20)
-        .onAppear {
-            self.telegramIsLinked = false
-        }
     }
 }
