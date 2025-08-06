@@ -73,18 +73,20 @@ struct SettingsView: View {
                         }
                         .opacity(isTelegramEnabled ? 1.0 : 0.5)
                     } else {
-                        HStack {
-                            Spacer()
-                            Button("Unlink Account") {
-                                //TODO: create unlink method in TgBingind
+                        VStack{
+                            HStack {
+                                Spacer()
+                                Button("Unlink Account") {
+                                    tgBinding.unlinkTelegram()
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.regular)
+                                .disabled(!isTelegramEnabled)
+                                Spacer()
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
-                            .disabled(!isTelegramEnabled)
-                            Spacer()
+                            .padding(.bottom, 5)
+                            .opacity(isTelegramEnabled ? 1.0 : 0.5)
                         }
-                        .padding(.bottom, 5)
-                        .opacity(isTelegramEnabled ? 1.0 : 0.5)
                     }
                 }
             }
@@ -92,4 +94,9 @@ struct SettingsView: View {
         }
         .padding([.leading, .trailing], 20)
     }
+}
+
+#Preview {
+    SettingsView(showSettings: .constant(true))
+        .frame(width: 300)
 }

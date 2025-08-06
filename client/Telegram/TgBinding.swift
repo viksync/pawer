@@ -3,7 +3,7 @@ import Foundation
 class TgBinding: ObservableObject {
     static let shared = TgBinding()
 
-    private let webhookBaseURL = "f4cc6d1ca003.ngrok-free.app"
+    private let webhookBaseURL = "b98a0d888c65.ngrok-free.app"
     private let botUsername = "pawerapp_bot"
 
     let botLinkURL: URL?
@@ -17,8 +17,15 @@ class TgBinding: ObservableObject {
       case failed
     }
 
+    enum UnlinkResult {
+        case success
+        case failed
+    }
+    @Published var unlinkResult: UnlinkResult?
+
     private var webSocketTask: URLSessionWebSocketTask?
     @Published var connectionState: ConnectionState = .idle
+
 
     private init() {
         self.uniqueID = TgBinding.getOrCreateUniqueID()
@@ -129,16 +136,57 @@ class TgBinding: ObservableObject {
             }
         } catch {
             print("❌ JSON serialization failed: \(error)")
+            // SHOULD WE USE SELF???
             connectionState = .failed
         }
     }
 
+    func unlinkTelegram() {
+        let url = URL(string: "https://\(webhookBaseURL)/unlink/\(uniqueID)")!
+
+        var request = URLRequest (url: url)
+        request.httpMethod = "POST"
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                DispatchQueue.main.async {
+                    self.unlinkResult = .failed
+                    print("unlinkTelegram: \(error)")
+                }
+            }
+
+            guard let data = data
+            else {
+                print("unlinkTelegram: no data received")
+                return
+            }
+
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let success = json["success"] as? Bool {
+                    if success {
+                        DispatchQueue.main.async {
+                            self.unlinkResult = .success
+                            self.isLinked = false
+                            UserDefaults.standard.set(false, forKey: "is_telegram_linked")
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            self.unlinkResult = .failed
+                        }
+                    }
+                }
+
+                
+            } catch {
+                print("unlinkTelegram: \(error)")
+            }
+
+        }.resume()
+    }
+
     func checkLinkingStatus() {
-        guard let url = URL(string: "https://\(webhookBaseURL)/is_linked/\(uniqueID)")
-        else {
-            print("Invalid URL for checking linking status")
-            return
-        }
+        let url = URL(string: "https://\(webhookBaseURL)/is_linked/\(uniqueID)")!
 
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
