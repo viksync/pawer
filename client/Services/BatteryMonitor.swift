@@ -45,6 +45,7 @@ class BatteryMonitor {
             if currentPercentage >= cachedThreshold {
                 if lastNotificationLevel != currentPercentage {
                     MacNotifications.shared.sendBatteryAlert(batteryLevel: currentPercentage)
+                    TgNotifications.shared.sendBatteryAlert(batteryLevel: currentPercentage)
                     lastNotificationLevel = currentPercentage
                 }
             } else if currentPercentage < cachedThreshold {

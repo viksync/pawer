@@ -3,11 +3,11 @@ import Foundation
 class TgBinding: ObservableObject {
     static let shared = TgBinding()
 
-    private let webhookBaseURL = "b98a0d888c65.ngrok-free.app"
+    let webhookBaseURL = "b98a0d888c65.ngrok-free.app"
     private let botUsername = "pawerapp_bot"
 
     let botLinkURL: URL?
-    private let uniqueID: String
+    let uniqueID: String
     @Published var isLinked: Bool
     @Published var linkedStatusLoading: Bool = true
 
@@ -136,7 +136,6 @@ class TgBinding: ObservableObject {
             }
         } catch {
             print("❌ JSON serialization failed: \(error)")
-            // SHOULD WE USE SELF???
             connectionState = .failed
         }
     }
