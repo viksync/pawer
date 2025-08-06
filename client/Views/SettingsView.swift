@@ -3,11 +3,11 @@ import SwiftUI
 struct SettingsView: View {
     @StateObject private var tgBinding = TgBinding.shared
     @Binding var showSettings: Bool
-
+    
     @AppStorage("pollingInterval") private var pollingInterval: Double = BatteryMonitor
         .defaultPollingInterval
     @AppStorage("isTelegramEnabled") private var isTelegramEnabled: Bool = true
-
+    
     var body: some View {
         VStack {
             HStack {
@@ -21,22 +21,22 @@ struct SettingsView: View {
             }
             .padding(.top, 20)
             .padding(.bottom, 10)
-
-            VStack {
-                HStack {
-
-                    Picker("Polling Interval", selection: $pollingInterval) {
-                        ForEach(Array(stride(from: 15, through: 60, by: 15)), id: \.self) { value in
-                            Text("\(Int(value))s").tag(Double(value))
-                        }
+            
+            HStack {
+                Picker("Check battery every", selection: $pollingInterval) {
+                    ForEach(Array(stride(from: 15, through: 60, by: 15)), id: \.self) { value in
+                        Text("\(Int(value))s").tag(Double(value))
                     }
-                    .onChange(of: pollingInterval) {
-                        BatteryMonitor.shared.updatePollingInterval(pollingInterval)
-                    }
-                    .pickerStyle(MenuPickerStyle())
                 }
-
-                GroupBox(label: Text("")) {
+                .onChange(of: pollingInterval) {
+                    BatteryMonitor.shared.updatePollingInterval(pollingInterval)
+                }
+                .pickerStyle(MenuPickerStyle())
+            }
+            
+            GroupBox(label: Text("")) {
+                
+                VStack {
                     HStack {
                         Spacer()
                         Toggle("Notify in Telegram", isOn: $isTelegramEnabled)
@@ -44,59 +44,84 @@ struct SettingsView: View {
                             .controlSize(.small)
                         Spacer()
                     }
-                    .padding([.top, .bottom], 5)
-
+                    .padding(.top, 5)
+                    
+                    Divider()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 5)
+                    
                     if !tgBinding.isLinked {
+                        
                         HStack {
-                            Spacer()
-
+                            
                             switch tgBinding.connectionState {
-                                case .idle:
-                                    Button("Connect Telegram") { tgBinding.connectTelegram() }
-                                case .waitingForTelegram:
-                                    VStack {
-                                        ProgressView()
-                                        .scaleEffect(0.6)
-                                        Text("Click the link and then Start button in bot")
-
-                                        Link("Open Telegram", destination: TgBinding.shared.botLinkURL!)
+                            case .idle:
+                                Button("Connect Telegram") { tgBinding.connectTelegram() }
+                            case .waitingForTelegram:
+                                VStack {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "arrow.down.circle.fill")
+                                            .foregroundColor(Color.gray.opacity(0.5))
+                                            .imageScale(.large)
+                                        
+                                        Text("Click the link and then press Start in the bot")
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(10)
+                                    .frame(maxWidth: 200)
+                                    
+                                    Link("Open Telegram", destination: TgBinding.shared.botLinkURL!)
                                         .font(.headline)
-                                        .disabled(!isTelegramEnabled)
-                                    }
-                                case .failed:
-                                    VStack {
+                                        .padding(.top, 5)
+                                }
+                            case .failed:
+                                VStack {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "exclamationmark.circle")
+                                            .foregroundColor(Color.gray.opacity(0.5))
+                                            .imageScale(.large)
+                                        
                                         Text("Connection failed")
-                                        Button("Try again") { tgBinding.connectTelegram() }
+                                            .foregroundColor(.secondary)
                                     }
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.2))
+                                    .cornerRadius(10)
+                                    .frame(maxWidth: 200)
+                                    
+                                    Button("Try again") { tgBinding.connectTelegram() }
+                                        .padding(.top, 5)
+                                        .buttonStyle(.borderedProminent)
+                                }
                             }
-                            Spacer()
                         }
-                        .opacity(isTelegramEnabled ? 1.0 : 0.5)
+                        
                     } else {
-                        VStack{
+                        
+                        VStack(spacing: 10) {
+                            
                             HStack {
-                                Spacer()
+                                Text("Status:")
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                            }
+                            
+                            HStack {
                                 Button("Unlink Account") {
                                     tgBinding.unlinkTelegram()
                                 }
-                                .buttonStyle(.bordered)
                                 .controlSize(.regular)
-                                .disabled(!isTelegramEnabled)
-                                Spacer()
                             }
-                            .padding(.bottom, 5)
-                            .opacity(isTelegramEnabled ? 1.0 : 0.5)
                         }
+                        
                     }
                 }
+                .padding(.bottom, 10)
             }
-            .padding(.bottom, 20)
         }
+        .padding(.bottom, 20)
         .padding([.leading, .trailing], 20)
     }
-}
-
-#Preview {
-    SettingsView(showSettings: .constant(true))
-        .frame(width: 300)
 }
