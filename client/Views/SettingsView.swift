@@ -50,13 +50,13 @@ struct SettingsView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 5)
                     
-                    if !tgBinding.isLinked {
+                    if tgBinding.linkedStatus == .unlinked {
                         
                         HStack {
                             
                             switch tgBinding.connectionState {
                             case .idle:
-                                Button("Connect Telegram") { tgBinding.connectTelegram() }
+                                Button("Connect Telegram") { tgBinding.connectWebSocket() }
                             case .waitingForTelegram:
                                 VStack {
                                     HStack(spacing: 8) {
@@ -91,15 +91,16 @@ struct SettingsView: View {
                                     .cornerRadius(10)
                                     .frame(maxWidth: 200)
                                     
-                                    Button("Try again") { tgBinding.connectTelegram() }
+                                    Button("Try again") { tgBinding.connectWebSocket() }
                                         .padding(.top, 5)
                                         .buttonStyle(.borderedProminent)
                                 }
                             }
                         }
                         
-                    } else {
-                        
+                    }
+                    
+                    if tgBinding.linkedStatus == .linked {
                         VStack(spacing: 10) {
                             
                             HStack {
@@ -115,8 +116,16 @@ struct SettingsView: View {
                                 .controlSize(.regular)
                             }
                         }
-                        
                     }
+                    
+                    if tgBinding.linkedStatus == .unknown {
+                        Text("Checking Linking")
+                    }
+                    
+                    if tgBinding.linkedStatus == .error {
+                        Text("Error while checking linking")
+                    }
+                    
                 }
                 .padding(.bottom, 10)
             }

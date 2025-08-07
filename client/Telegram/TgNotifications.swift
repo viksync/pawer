@@ -8,7 +8,7 @@ class TgNotifications {
     }
 
     func sendBatteryAlert(batteryLevel: Int) {
-        guard TgBinding.shared.isLinked else {
+        guard TgBinding.shared.linkedStatus == .linked else {
             print("Telegram not linked, skipping notification")
             return
         }

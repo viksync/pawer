@@ -5,18 +5,22 @@ class TgBinding: ObservableObject {
 
     let webhookBaseURL = "b98a0d888c65.ngrok-free.app"
     private let botUsername = "pawerapp_bot"
-
     let botLinkURL: URL?
     let uniqueID: String
-    @Published var isLinked: Bool
-    @Published var linkedStatusLoading: Bool = true
+
+    enum LinkedStatus {
+        case unknown
+        case linked
+        case unlinked
+        case error
+    }
+    @Published var linkedStatus: LinkedStatus = .unknown
 
     enum ConnectionState {
       case idle
       case waitingForTelegram
       case failed
     }
-
     enum UnlinkResult {
         case success
         case failed
@@ -30,14 +34,7 @@ class TgBinding: ObservableObject {
     private init() {
         self.uniqueID = TgBinding.getOrCreateUniqueID()
         self.botLinkURL = URL(string: "https://t.me/\(botUsername)?start=\(uniqueID)")
-
-        if UserDefaults.standard.object(forKey: "is_telegram_linked") != nil {
-            self.isLinked = UserDefaults.standard.bool(forKey: "is_telegram_linked")
-            checkLinkingStatus()
-        } else {
-            self.isLinked = false
-            self.linkedStatusLoading = false
-        }
+        checkLinkingStatus()
     }
 
     private static func getOrCreateUniqueID() -> String {
@@ -52,11 +49,7 @@ class TgBinding: ObservableObject {
         return newID
     }
 
-    func connectTelegram() {
-        connectWebSocket()
-    }
-
-    private func connectWebSocket() {
+    func connectWebSocket() {
         let wsURL = URL(string: "wss://\(webhookBaseURL)/ws")!
 
         webSocketTask = URLSession.shared.webSocketTask(with: wsURL)
@@ -97,7 +90,7 @@ class TgBinding: ObservableObject {
                 
                if text.contains("\"type\": \"linked\"") {
                     DispatchQueue.main.async {
-                        self.isLinked = true
+                        self.linkedStatus = .linked
                         self.connectionState = .idle
                         UserDefaults.standard.set(true, forKey: "is_telegram_linked")
 
@@ -166,7 +159,7 @@ class TgBinding: ObservableObject {
                     if success {
                         DispatchQueue.main.async {
                             self.unlinkResult = .success
-                            self.isLinked = false
+                            self.linkedStatus = .unlinked
                             UserDefaults.standard.set(false, forKey: "is_telegram_linked")
                         }
                     } else {
@@ -189,27 +182,35 @@ class TgBinding: ObservableObject {
 
         URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
-                print("checkLinkingStatus: \(error)")
+                DispatchQueue.main.async {
+                    print("checkLinkingStatus: \(error)")
+                    self.linkedStatus = .error
+                }
                 return
             }
 
             guard let data = data
             else {
                 print("checkLinkingStatus: no data received")
+                DispatchQueue.main.async {
+                    self.linkedStatus = .error
+                }
                 return
             }
 
             do {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let linked = json["linked"] as? Bool {
+                let isLinkedResponse = json["linked"] as? Bool {
 
                     DispatchQueue.main.async {
-                        self.isLinked = linked
-                        UserDefaults.standard.set(linked, forKey: "is_telegram_linked")
+                        self.linkedStatus = isLinkedResponse ? .linked : .unlinked
+                        UserDefaults.standard.set(isLinkedResponse, forKey: "is_telegram_linked")
                     }
                 }
             } catch {
                 print("checkLinkingStatus: \(error)")
+                self.linkedStatus = .error
+                print("catch: linkedStatus is now: \(self.linkedStatus)")
             }
         }.resume()
     }
