@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage("maxThreshold") private var maxThreshold: Double = BatteryMonitor.defaultMaxThreshold
+    @AppStorage("maxThreshold") private var maxThreshold: Int = BatteryMonitor.defaultMaxThreshold
     @State private var showSettings: Bool = false
 
     var body: some View {
@@ -14,11 +14,16 @@ struct ContentView: View {
                 Text("Threshold")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 HStack {
-                    Slider(value: $maxThreshold, in: 0...100)
+                    Slider(
+                        value: Binding(
+                            get: { Double(maxThreshold) },
+                            set: { maxThreshold = Int($0) }
+                        ),
+                        in: 0...100)
                         .onChange(of: maxThreshold) {
-                            BatteryMonitor.shared.updateCachedThreshold(Int(maxThreshold))
+                            BatteryMonitor.shared.updateCachedThreshold(maxThreshold)
                         }
-                    Text(String(format: "%d%%", Int(maxThreshold)))
+                    Text("\(maxThreshold)%")
                 }
                 .padding(.bottom, 15)
                 

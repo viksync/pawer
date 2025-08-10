@@ -6,9 +6,9 @@ class BatteryMonitor {
     
     private var timer: Timer?
     private var lastNotificationLevel: Int?
-    private var cachedThreshold: Int = 0
     static let defaultPollingInterval: Double = 30.0
-    static let defaultMaxThreshold: Double = 80.0
+    static let defaultMaxThreshold: Int = 80
+    private var cachedThreshold: Int = defaultMaxThreshold
 
     private init() {
         UserDefaults.standard.register(defaults: [
