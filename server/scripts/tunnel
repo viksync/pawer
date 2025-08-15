@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+# Check if BOT_TOKEN is set
+if [ -z "$BOT_TOKEN" ]; then
+    echo "❌ BOT_TOKEN environment variable is not set"
+    echo "Please run: export BOT_TOKEN=your_bot_token"
+    exit 1
+fi
+
+# Check if ngrok is already running
+if curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -q "public_url"; then
+    echo "⚠️  Ngrok is already running!"
+    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
+    echo "🔗 Current tunnel: $NGROK_URL"
+    echo "Use ./restart_server.sh to restart just the server"
+    exit 0
+fi
+
+echo "🌐 Starting ngrok tunnel..."
+
+# Start ngrok in background
+ngrok http 3333 --log=stdout > ngrok.log &
+NGROK_PID=$!
+
+# Wait for ngrok to start and get the URL
+echo "⏳ Waiting for ngrok to initialize..."
+sleep 3
+
+# Extract the ngrok URL
+NGROK_URL=""
+for i in {1..10}; do
+    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
+    if [ "$NGROK_URL" != "" ]; then
+        break
+    fi
+    echo "🔄 Retrying ngrok URL detection... ($i/10)"
+    sleep 1
+done
+
+if [ "$NGROK_URL" = "" ]; then
+    echo "❌ Failed to get ngrok URL"
+    kill $NGROK_PID 2>/dev/null || true
+    exit 1
+fi
+
+echo "✅ Ngrok tunnel created: $NGROK_URL"
+
+# Register webhook with Telegram
+WEBHOOK_URL="$NGROK_URL/webhook"
+echo "📡 Registering webhook: $WEBHOOK_URL"
+
+RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" \
+    -H "Content-Type: application/json" \
+    -d "{\"url\": \"$WEBHOOK_URL\"}")
+
+# Check if webhook registration was successful  
+if echo "$RESPONSE" | grep -q '"ok":true'; then
+    echo "✅ Webhook registered successfully!"
+    echo "📋 Webhook URL: $WEBHOOK_URL"
+    echo "🔗 Ngrok dashboard: http://localhost:4040"
+    echo "🔗 Ngrok PID: $NGROK_PID"
+    echo ""
+    echo "🎯 Ngrok setup complete!"
+    echo "   Now run: ./restart_server.sh to start your server"
+    echo "   To stop ngrok: kill $NGROK_PID"
+    echo ""
+    echo "💡 Keep this terminal open to maintain the tunnel"
+else
+    echo "❌ Failed to register webhook"
+    echo "Response: $RESPONSE"
+    kill $NGROK_PID 2>/dev/null || true
+    exit 1
+fi
+
+# Keep ngrok running
+echo "Press Ctrl+C to stop ngrok..."
+wait $NGROK_PID

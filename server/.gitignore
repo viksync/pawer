@@ -5,5 +5,7 @@ build/
 out/
 lib/
 
+db/
+
 *.log
 .DS_Store

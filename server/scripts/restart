@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+echo "🔄 Restarting Node.js server..."
+
+# Check if ngrok is running
+if ! curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -q "public_url"; then
+    echo "❌ Ngrok is not running!"
+    echo "Run ./setup_ngrok.sh first to set up the tunnel"
+    exit 1
+fi
+
+# Get current ngrok URL
+NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
+echo "🔗 Using ngrok tunnel: $NGROK_URL"
+
+# Kill any existing server process
+echo "🛑 Stopping existing server..."
+pkill -f "node build/main.js" 2>/dev/null || echo "   No existing server found"
+
+# Clean previous build
+echo "🧹 Cleaning previous build..."
+npm run clean
+
+# Build the server
+echo "📦 Building server..."
+npm run build
+
+# Start the server in background
+echo "🚀 Starting server on port 3333..."
+npm start &
+SERVER_PID=$!
+
+# Wait a moment for server to start
+sleep 2
+
+# Check if server is running
+if ! curl -s http://localhost:3333/is_linked/test > /dev/null; then
+    echo "❌ Server failed to start"
+    kill $SERVER_PID 2>/dev/null || true
+    exit 1
+fi
+
+echo "✅ Server restarted successfully!"
+echo "   Server PID: $SERVER_PID"
+echo "   Webhook URL: $NGROK_URL/webhook"
+echo "   Dashboard: http://localhost:4040"
+echo ""
+echo "🎯 Ready for development!"
+echo "   To stop server: kill $SERVER_PID"
+echo "   To restart again: ./restart_server.sh"
+
+# Keep script running and handle cleanup on exit
+cleanup() {
+    echo ""
+    echo "🧹 Stopping server..."
+    kill $SERVER_PID 2>/dev/null || true
+    echo "✅ Server stopped"
+}
+
+trap cleanup EXIT INT TERM
+
+# Wait for user to stop
+echo ""
+echo "Press Ctrl+C to stop the server (ngrok will keep running)..."
+wait
