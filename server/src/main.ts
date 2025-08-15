@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { z } from 'zod';
 import * as db from './db.js';
-import type { WebSocket } from '@fastify/websocket';
+import * as webSocket from './websocket.js';
 // TODO: try middleware and limits
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -25,18 +25,6 @@ const UserNotification = z.object({
     message: z.string(),
 });
 
-const WSregistationData = z.object({
-    type: z.string(),
-    unique_id: z.string(),
-});
-
-interface WSConnectionsInfo {
-    socket: WebSocket;
-    lastSeen: number;
-}
-
-const activeWSConnections = new Map<string, WSConnectionsInfo>();
-
 const fastify = Fastify({
     logger:
         process.env.NODE_ENV === 'production' ?
@@ -48,51 +36,7 @@ const fastify = Fastify({
 });
 
 await fastify.register(import('@fastify/websocket'));
-
-fastify.get('/ws', { websocket: true }, (connection, request) => {
-    connection.on('message', (message: Buffer) => {
-        try {
-            const messageStr = message.toString();
-            const rawData = JSON.parse(messageStr);
-            const data = WSregistationData.parse(rawData);
-
-            if (!(data.type === 'listen_for_link')) {
-                connection.close(1003, 'Invalid message format');
-                return;
-            }
-
-            activeWSConnections.set(data.unique_id, {
-                socket: connection,
-                lastSeen: Date.now(),
-            });
-
-            connection.send(
-                JSON.stringify({
-                    type: 'listening_confirmed',
-                    unique_id: data.unique_id,
-                }),
-            );
-        } catch (error) {
-            if (error instanceof z.ZodError) {
-                console.error(error);
-                connection.close(1003, 'Invalid message format');
-                return;
-            }
-
-            console.error(error);
-            connection.close(1002, 'Json error');
-        }
-    });
-
-    connection.on('close', () => {
-        for (const [key, value] of activeWSConnections) {
-            if (value.socket === connection) {
-                activeWSConnections.delete(key);
-                break;
-            }
-        }
-    });
-});
+webSocket.setup(fastify);
 
 fastify.post('/webhook', async (request, reply) => {
     let data;
@@ -127,22 +71,10 @@ fastify.post('/webhook', async (request, reply) => {
         return reply.code(200).send('OK');
     }
 
-    const wsConnection = activeWSConnections.get(uniqueId);
-    if (wsConnection) {
-        try {
-            wsConnection.socket.send(
-                JSON.stringify({
-                    type: 'linked',
-                    unique_id: uniqueId,
-                }),
-            );
-
-            wsConnection.socket.close(1000, 'Registration complete');
-            activeWSConnections.delete(uniqueId);
-        } catch (error) {
-            console.error(error);
-        }
-    }
+    webSocket.notifyApp(uniqueId, {
+        type: 'linked',
+        unique_id: uniqueId,
+    });
 
     return reply.code(200).send('OK');
 });
