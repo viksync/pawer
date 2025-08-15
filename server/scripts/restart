@@ -18,15 +18,15 @@ echo "🔗 Using ngrok tunnel: $NGROK_URL"
 
 # Kill any existing server process
 echo "🛑 Stopping existing server..."
-pkill -f "node build/main.js" 2>/dev/null || echo "   No existing server found"
+pkill -f "node build/main.js" 2>/dev/null || echo "✅ No existing server found"
 
 # Clean previous build
 echo "🧹 Cleaning previous build..."
-npm run clean
+npm run clean >/dev/null
 
 # Build the server
 echo "📦 Building server..."
-npm run build
+npm run build >/dev/null
 
 # Start the server in background
 echo "🚀 Starting server on port 3333..."
@@ -36,21 +36,33 @@ SERVER_PID=$!
 # Wait a moment for server to start
 sleep 2
 
-# Check if server is running
-if ! curl -s http://localhost:3333/is_linked/test > /dev/null; then
-    echo "❌ Server failed to start"
-    kill $SERVER_PID 2>/dev/null || true
-    exit 1
+# Check if BOT_TOKEN is set for webhook registration
+if [ -z "$BOT_TOKEN" ]; then
+    echo "⚠️  BOT_TOKEN not set - skipping webhook registration"
+    echo "   Set BOT_TOKEN and restart to enable webhook"
+else
+    # Register webhook with Telegram
+    echo ""
+    echo "📡 Registering webhook with Telegram..."
+    WEBHOOK_URL="$NGROK_URL/webhook"
+    
+    RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" \
+        -H "Content-Type: application/json" \
+        -d "{\"url\": \"$WEBHOOK_URL\"}")
+    
+    if echo "$RESPONSE" | grep -q '"ok":true'; then
+        echo "✅ Webhook registered successfully!"
+    else
+        echo "❌ Failed to register webhook: $RESPONSE"
+        kill $SERVER_PID 2>/dev/null || true
+        exit 1
+    fi
 fi
 
-echo "✅ Server restarted successfully!"
-echo "   Server PID: $SERVER_PID"
-echo "   Webhook URL: $NGROK_URL/webhook"
-echo "   Dashboard: http://localhost:4040"
+echo "✅ Setup complete!"
+echo "🆔 Server PID: $SERVER_PID"
+echo "📊 Dashboard: http://localhost:4040"
 echo ""
-echo "🎯 Ready for development!"
-echo "   To stop server: kill $SERVER_PID"
-echo "   To restart again: ./restart_server.sh"
 
 # Keep script running and handle cleanup on exit
 cleanup() {
@@ -64,5 +76,5 @@ trap cleanup EXIT INT TERM
 
 # Wait for user to stop
 echo ""
-echo "Press Ctrl+C to stop the server (ngrok will keep running)..."
+echo "Press Ctrl+C to stop the server (ngrok will keep running)"
 wait

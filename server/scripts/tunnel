@@ -46,35 +46,11 @@ if [ "$NGROK_URL" = "" ]; then
     exit 1
 fi
 
-echo "✅ Ngrok tunnel created: $NGROK_URL"
-
-# Register webhook with Telegram
-WEBHOOK_URL="$NGROK_URL/webhook"
-echo "📡 Registering webhook: $WEBHOOK_URL"
-
-RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/setWebhook" \
-    -H "Content-Type: application/json" \
-    -d "{\"url\": \"$WEBHOOK_URL\"}")
-
-# Check if webhook registration was successful  
-if echo "$RESPONSE" | grep -q '"ok":true'; then
-    echo "✅ Webhook registered successfully!"
-    echo "📋 Webhook URL: $WEBHOOK_URL"
-    echo "🔗 Ngrok dashboard: http://localhost:4040"
-    echo "🔗 Ngrok PID: $NGROK_PID"
-    echo ""
-    echo "🎯 Ngrok setup complete!"
-    echo "   Now run: ./restart_server.sh to start your server"
-    echo "   To stop ngrok: kill $NGROK_PID"
-    echo ""
-    echo "💡 Keep this terminal open to maintain the tunnel"
-else
-    echo "❌ Failed to register webhook"
-    echo "Response: $RESPONSE"
-    kill $NGROK_PID 2>/dev/null || true
-    exit 1
-fi
-
-# Keep ngrok running
-echo "Press Ctrl+C to stop ngrok..."
+echo "✅ Ngrok tunnel created successfully!"
+echo "📋 Tunnel URL: $NGROK_URL"
+echo "🔗 Ngrok dashboard: http://localhost:4040"
+echo "🔗 Ngrok PID: $NGROK_PID"
+echo ""
+echo "Keep this terminal open to maintain the tunnel"
+echo "Press Ctrl+C to stop ngrok"
 wait $NGROK_PID
