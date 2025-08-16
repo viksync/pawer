@@ -19,29 +19,31 @@ if curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -q "public_url";
     exit 0
 fi
 
-echo "🌐 Starting ngrok tunnel..."
+echo "🌐 Starting ngrok tunnel with static domain..."
 
-# Start ngrok in background
-ngrok http 3333 --log=stdout > ngrok.log &
+# Start ngrok in background with static domain
+ngrok http 3333 --domain=tight-constantly-gibbon.ngrok-free.app --log=stdout > ngrok.log &
 NGROK_PID=$!
 
 # Wait for ngrok to start and get the URL
 echo "⏳ Waiting for ngrok to initialize..."
 sleep 3
 
-# Extract the ngrok URL
-NGROK_URL=""
+# Use the static domain URL
+NGROK_URL="https://tight-constantly-gibbon.ngrok-free.app"
+
+# Verify ngrok is running
 for i in {1..10}; do
-    NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
-    if [ "$NGROK_URL" != "" ]; then
+    if curl -s http://localhost:4040/api/tunnels | grep -q "public_url"; then
         break
     fi
-    echo "🔄 Retrying ngrok URL detection... ($i/10)"
+    echo "🔄 Waiting for ngrok to start... ($i/10)"
     sleep 1
 done
 
-if [ "$NGROK_URL" = "" ]; then
-    echo "❌ Failed to get ngrok URL"
+# Final check
+if ! curl -s http://localhost:4040/api/tunnels | grep -q "public_url"; then
+    echo "❌ Failed to start ngrok tunnel"
     kill $NGROK_PID 2>/dev/null || true
     exit 1
 fi

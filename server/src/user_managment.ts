@@ -22,7 +22,7 @@ export function setup(fastify: FastifyInstance, dbInstance: UserRepository) {
         '/is_linked/:uid',
         isLinkedHandler,
     );
-    fastify.post<{ Params: { uid: string } }>('/unlink/:uid', unlinkHandler);
+    fastify.delete<{ Params: { uid: string } }>('/unlink/:uid', unlinkHandler);
 }
 
 async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -75,12 +75,10 @@ async function unlinkHandler(
         const result = await db.deleteUser(uid);
 
         if (!result) {
-            return reply.code(404).send({ error: 'User not found' });
-            // return reply.code(404).send('User not found');
+            return reply.code(404).send('User not found');
         }
 
-        // return reply.code(204).send();
-        return reply.code(200).send({ success: true });
+        return reply.code(204).send();
     } catch {
         return reply.code(500).send('Database error');
     }
@@ -94,12 +92,10 @@ async function isLinkedHandler(
         const result = await db.findUser(uid);
 
         if (!result) {
-            // return reply.code(404).send('Not Found');
-            return reply.code(200).send({ linked: false });
+            return reply.code(404).send('Not Found');
         }
 
-        return reply.code(200).send({ linked: true });
-        // return reply.code(200).send('OK');
+        return reply.code(200).send('OK');
     } catch {
         return reply.code(500).send('Database error');
     }
