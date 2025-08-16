@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import * as webSocket from './websocket.js';
 import * as userManagment from './user_managment.js';
 import * as notifications from './notifications.js';
+import { userRepository } from './db.js';
 // TODO: try middleware and limits
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -24,8 +25,8 @@ async function createServer(botToken: string) {
 
     await fastify.register(import('@fastify/websocket'));
     webSocket.setup(fastify);
-    userManagment.setup(fastify);
-    notifications.setup(fastify, botToken);
+    userManagment.setup(fastify, userRepository);
+    notifications.setup(fastify, userRepository, botToken);
 
     return fastify;
 }

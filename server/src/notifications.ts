@@ -1,24 +1,31 @@
 import { z } from 'zod';
-import * as db from './db.js';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { UserRepository } from './db.js';
 
-const UserNotification = z.object({
+const NotificationRequestScheme = z.object({
     unique_id: z.string(),
     message: z.string(),
 });
 
 let BOT_TOKEN: string;
+let db: UserRepository;
 
-export function setup(fastify: FastifyInstance, botToken: string) {
+export function setup(
+    fastify: FastifyInstance,
+    dbInstance: UserRepository,
+    botToken: string,
+) {
     BOT_TOKEN = botToken;
+    db = dbInstance;
+
     fastify.post('/notify', notifyHandler);
 }
 
-async function notifyHandler(request, reply) {
+async function notifyHandler(request: FastifyRequest, reply: FastifyReply) {
     try {
-        const data = UserNotification.parse(request.body);
+        const data = NotificationRequestScheme.parse(request.body);
 
-        const result = db.findUser.get(data.unique_id);
+        const result = await db.findUser(data.unique_id);
         if (!result) {
             return reply.code(404).send('UUID Not Found');
         }

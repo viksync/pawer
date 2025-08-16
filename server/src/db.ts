@@ -1,34 +1,56 @@
-import Database from 'better-sqlite3';
+import Database, { type Database as SqliteDb, RunResult } from 'better-sqlite3';
 const db = new Database('./db/database.db');
 
-export interface UserBinding {
-    unique_id: string;
+export interface TgBindingRecord {
+    uid: string;
     chat_id: string;
 }
 
-const createTable = db.prepare(`
-    CREATE TABLE IF NOT EXISTS user_bindings (
-    unique_id TEXT PRIMARY KEY,
-    chat_id TEXT NOT NULL
-    )
-`);
+export interface UserRepository {
+    findUser(uid: string): Promise<TgBindingRecord | undefined>;
+    insertUser(uid: string, chatId: string): Promise<void>;
+    deleteUser(uid: string): Promise<boolean>;
+}
 
-const insertUser = db.prepare(`
-    INSERT INTO user_bindings
-    (unique_id, chat_id)
-    VALUES (?, ?)    
-`);
+export class SqliteRepo implements UserRepository {
+    private insertUserQuery: Database.Statement<[string, string], RunResult>;
+    private findUserQuery: Database.Statement<
+        [string],
+        TgBindingRecord | undefined
+    >;
+    private deleteUserQuery: Database.Statement<[string], RunResult>;
 
-const findUser = db.prepare(`
-    SELECT *
-    FROM user_bindings
-    WHERE unique_id = ?
-`) as Database.Statement<[string], UserBinding>;
+    constructor(private db: SqliteDb) {
+        this.insertUserQuery = db.prepare(`
+            INSERT INTO tg_user_bindings
+            (uid, chat_id)
+            VALUES (?, ?)
+        `);
 
-const deleteUser = db.prepare(`
-    DELETE 
-    FROM user_bindings
-    WHERE unique_id = ?
-`);
+        this.findUserQuery = db.prepare(`
+            SELECT *
+            FROM tg_user_bindings
+            WHERE uid = ?
+        `);
 
-export { createTable, insertUser, findUser, deleteUser };
+        this.deleteUserQuery = db.prepare(`
+            DELETE 
+            FROM tg_user_bindings
+            WHERE uid = ?
+        `);
+    }
+
+    async findUser(uid: string): Promise<TgBindingRecord | undefined> {
+        return this.findUserQuery.get(uid);
+    }
+
+    async insertUser(uid: string, chatId: string): Promise<void> {
+        this.insertUserQuery.run(uid, chatId);
+    }
+
+    async deleteUser(uid: string): Promise<boolean> {
+        return this.deleteUserQuery.run(uid).changes > 0;
+    }
+}
+
+export const userRepository: UserRepository = new SqliteRepo(db);

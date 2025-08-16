@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import * as db from './db.js';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import * as webSocket from './websocket.js';
+import type { UserRepository } from './db.js';
 
-const TelegramWebhook = z.object({
+const TgWebhookScheme = z.object({
     message: z.object({
         text: z.string(),
         chat: z.object({
@@ -12,19 +12,23 @@ const TelegramWebhook = z.object({
     }),
 });
 
-export function setup(fastify: FastifyInstance) {
+let db: UserRepository;
+
+export function setup(fastify: FastifyInstance, dbInstance: UserRepository) {
+    db = dbInstance;
+
     fastify.post('/webhook', webhookHandler);
-    fastify.get<{ Params: { uuid: string } }>(
-        '/is_linked/:uuid',
+    fastify.get<{ Params: { uid: string } }>(
+        '/is_linked/:uid',
         isLinkedHandler,
     );
-    fastify.post<{ Params: { uuid: string } }>('/unlink/:uuid', unlinkHandler);
+    fastify.post<{ Params: { uid: string } }>('/unlink/:uid', unlinkHandler);
 }
 
-async function webhookHandler(request, reply) {
+async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
     let data;
     try {
-        data = TelegramWebhook.parse(request.body);
+        data = TgWebhookScheme.parse(request.body);
     } catch (error) {
         if (error instanceof z.ZodError) {
             return reply.code(400).send('Invalid webhook format');
@@ -39,35 +43,38 @@ async function webhookHandler(request, reply) {
         return reply.code(200).send('OK');
     }
 
-    const uniqueId = text.split(' ')[1];
-    if (!uniqueId) {
+    const uid = text.split(' ')[1];
+    if (!uid) {
         return reply.code(200).send('OK');
     }
 
     try {
-        const existingUser = db.findUser.get(uniqueId);
+        const existingUser = await db.findUser(uid);
         if (!existingUser) {
-            db.insertUser.run(uniqueId, chatId.toString());
+            await db.insertUser(uid, chatId.toString());
         }
     } catch (error) {
         console.error(error);
         return reply.code(200).send('OK');
     }
 
-    webSocket.notifyApp(uniqueId, {
+    webSocket.notifyApp(uid, {
         type: 'linked',
-        unique_id: uniqueId,
+        unique_id: uid,
     });
 
     return reply.code(200).send('OK');
 }
 
-async function unlinkHandler(request, reply) {
-    const { uuid } = request.params;
+async function unlinkHandler(
+    request: FastifyRequest<{ Params: { uid: string } }>,
+    reply: FastifyReply,
+) {
+    const { uid } = request.params;
     try {
-        const result = db.deleteUser.run(uuid);
+        const result = await db.deleteUser(uid);
 
-        if (!result.changes) {
+        if (!result) {
             return reply.code(404).send({ error: 'User not found' });
             // return reply.code(404).send('User not found');
         }
@@ -78,10 +85,13 @@ async function unlinkHandler(request, reply) {
         return reply.code(500).send('Database error');
     }
 }
-async function isLinkedHandler(request, reply) {
-    const { uuid } = request.params;
+async function isLinkedHandler(
+    request: FastifyRequest<{ Params: { uid: string } }>,
+    reply: FastifyReply,
+) {
+    const { uid } = request.params;
     try {
-        const result = db.findUser.get(uuid);
+        const result = await db.findUser(uid);
 
         if (!result) {
             // return reply.code(404).send('Not Found');

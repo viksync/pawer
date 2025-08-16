@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { WebSocket as FastifyWebSocket } from '@fastify/websocket';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 const registrationSchema = z.object({
     type: z.string(),
@@ -18,7 +18,7 @@ export function setup(fastifyInstance: FastifyInstance) {
     fastifyInstance.get(
         '/ws',
         { websocket: true },
-        (connection: FastifyWebSocket, request) => {
+        (connection: FastifyWebSocket, request: FastifyRequest) => {
             connection.on('message', (payload: Buffer) =>
                 messageHandler(connection, payload),
             );
