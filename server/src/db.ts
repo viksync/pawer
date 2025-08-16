@@ -1,5 +1,4 @@
 import Database, { type Database as SqliteDb, RunResult } from 'better-sqlite3';
-const db = new Database('./db/database.db');
 
 export interface TgBindingRecord {
     uid: string;
@@ -52,5 +51,3 @@ export class SqliteRepo implements UserRepository {
         return this.deleteUserQuery.run(uid).changes > 0;
     }
 }
-
-export const userRepository: UserRepository = new SqliteRepo(db);
