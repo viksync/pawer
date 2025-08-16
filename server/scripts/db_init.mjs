@@ -5,8 +5,8 @@ try {
 
     const createTable = db.prepare(
         `
-        CREATE TABLE IF NOT EXISTS user_bindings (
-        unique_id TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS tg_user_bindings (
+        uid TEXT PRIMARY KEY,
         chat_id TEXT NOT NULL
         )
         `,
