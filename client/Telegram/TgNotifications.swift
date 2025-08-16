@@ -8,12 +8,18 @@ class TgNotifications {
     }
 
     func sendBatteryAlert(batteryLevel: Int) {
-        guard TgBinding.shared.linkedStatus == .linked else {
-            print("Telegram not linked, skipping notification")
+        print("🔍 DEBUG: Current linkedStatus: \(TgBinding.shared.linkedStatus)")
+        print("🔍 DEBUG: UserDefaults is_telegram_linked: \(UserDefaults.standard.bool(forKey: "is_telegram_linked"))")
+        print("🔍 DEBUG: UserDefaults isTelegramEnabled: \(UserDefaults.standard.bool(forKey: "isTelegramEnabled"))")
+        print("🔍 DEBUG: uniqueID: \(TgBinding.shared.uniqueID)")
+        
+        guard TgBinding.shared.linkedStatus == .linked || UserDefaults.standard.bool(forKey: "is_telegram_linked") else {
+            print("❌ Telegram not linked, skipping notification (status: \(TgBinding.shared.linkedStatus))")
             return
         }
 
         guard UserDefaults.standard.bool(forKey: "isTelegramEnabled") else {
+            print("❌ Telegram notifications disabled in settings")
             return
         }
 
@@ -36,11 +42,22 @@ class TgNotifications {
             
             URLSession.shared.dataTask(with: request) { data, response, error in 
                 if let error = error {
-                    print("TgNotifications.sendBatteryAlert: \(error)")
+                    print("❌ TgNotifications.sendBatteryAlert error: \(error)")
+                    return
                 }
 
                 if let httpResponse = response as? HTTPURLResponse {
-                    print("Telegram notification response: \(httpResponse.statusCode)")
+                    print("✅ Telegram notification response: \(httpResponse.statusCode)")
+                    
+                    if let data = data, let responseString = String(data: data, encoding: .utf8) {
+                        print("📄 Response body: \(responseString)")
+                    }
+                    
+                    if httpResponse.statusCode != 200 {
+                        print("❌ HTTP Error: \(httpResponse.statusCode)")
+                    }
+                } else {
+                    print("❌ No HTTP response received")
                 }
             }.resume()
         } catch {

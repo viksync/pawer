@@ -3,7 +3,7 @@ import Foundation
 class TgBinding: ObservableObject {
     static let shared = TgBinding()
 
-    let webhookBaseURL = "b98a0d888c65.ngrok-free.app"
+    let webhookBaseURL = "tight-constantly-gibbon.ngrok-free.app"
     private let botUsername = "pawerapp_bot"
     let botLinkURL: URL?
     let uniqueID: String
@@ -77,18 +77,18 @@ class TgBinding: ObservableObject {
     }
 
     private func handleWebSocketMessage(_ message: URLSessionWebSocketTask.Message) {
-        switch message {
+        switch message { 
             case .string(let text):
                 print("📡 Received: \(text)")
 
-                if text.contains("\"type\": \"listening_confirmed\"") {
+                if text.contains("\"type\":\"listening_confirmed\"") {
                     DispatchQueue.main.async {
                         self.connectionState = .waitingForTelegram
                     }
                     return
                 } 
                 
-               if text.contains("\"type\": \"linked\"") {
+               if text.contains("\"type\":\"linked\"") {
                     DispatchQueue.main.async {
                         self.linkedStatus = .linked
                         self.connectionState = .idle
@@ -129,7 +129,9 @@ class TgBinding: ObservableObject {
             }
         } catch {
             print("❌ JSON serialization failed: \(error)")
-            connectionState = .failed
+            DispatchQueue.main.async {
+                self.connectionState = .failed
+            }
         }
     }
 
@@ -137,7 +139,7 @@ class TgBinding: ObservableObject {
         let url = URL(string: "https://\(webhookBaseURL)/unlink/\(uniqueID)")!
 
         var request = URLRequest (url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = "DELETE"
         
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
@@ -145,35 +147,25 @@ class TgBinding: ObservableObject {
                     self.unlinkResult = .failed
                     print("unlinkTelegram: \(error)")
                 }
-            }
-
-            guard let data = data
-            else {
-                print("unlinkTelegram: no data received")
                 return
             }
 
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let success = json["success"] as? Bool {
-                    if success {
-                        DispatchQueue.main.async {
-                            self.unlinkResult = .success
-                            self.linkedStatus = .unlinked
-                            UserDefaults.standard.set(false, forKey: "is_telegram_linked")
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            self.unlinkResult = .failed
-                        }
-                    }
+            guard let httpResponse = response as? HTTPURLResponse else {
+                DispatchQueue.main.async {
+                    self.unlinkResult = .failed
                 }
-
-                
-            } catch {
-                print("unlinkTelegram: \(error)")
+                return
             }
 
+            DispatchQueue.main.async {
+                if httpResponse.statusCode == 204 {
+                    self.unlinkResult = .success
+                    self.linkedStatus = .unlinked
+                    UserDefaults.standard.set(false, forKey: "is_telegram_linked")
+                } else {
+                    self.unlinkResult = .failed
+                }
+            }
         }.resume()
     }
 
@@ -189,28 +181,25 @@ class TgBinding: ObservableObject {
                 return
             }
 
-            guard let data = data
-            else {
-                print("checkLinkingStatus: no data received")
+            guard let httpResponse = response as? HTTPURLResponse else {
                 DispatchQueue.main.async {
                     self.linkedStatus = .error
                 }
                 return
             }
 
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                let isLinkedResponse = json["linked"] as? Bool {
-
-                    DispatchQueue.main.async {
-                        self.linkedStatus = isLinkedResponse ? .linked : .unlinked
-                        UserDefaults.standard.set(isLinkedResponse, forKey: "is_telegram_linked")
-                    }
+            DispatchQueue.main.async {
+                switch httpResponse.statusCode {
+                case 200:
+                    self.linkedStatus = .linked
+                    UserDefaults.standard.set(true, forKey: "is_telegram_linked")
+                case 404:
+                    self.linkedStatus = .unlinked
+                    UserDefaults.standard.set(false, forKey: "is_telegram_linked")
+                default:
+                    self.linkedStatus = .error
+                    print("❌ DEBUG: Unexpected status code: \(httpResponse.statusCode)")
                 }
-            } catch {
-                print("checkLinkingStatus: \(error)")
-                self.linkedStatus = .error
-                print("catch: linkedStatus is now: \(self.linkedStatus)")
             }
         }.resume()
     }
