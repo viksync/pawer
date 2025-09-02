@@ -55,7 +55,7 @@ async function main() {
     const fastify = await createServer(userRepository, BOT_TOKEN!);
 
     try {
-        await fastify.listen({ port: PORT });
+        await fastify.listen({ port: PORT, host: '0.0.0.0' });
 
         ['SIGTERM', 'SIGINT'].forEach((signal) => {
             process.on(signal, () => {
