@@ -15,16 +15,20 @@ interface Connection {
 const activeConnections = new Map<string, Connection>();
 
 export function setup(fastifyInstance: FastifyInstance) {
-    fastifyInstance.get(
-        '/ws',
-        { websocket: true },
-        (connection: FastifyWebSocket, request: FastifyRequest) => {
-            connection.on('message', (payload: Buffer) =>
-                messageHandler(connection, payload),
-            );
-            connection.on('close', () => exitHandler(connection));
-        },
-    );
+    try {
+        fastifyInstance.get(
+            '/ws',
+            { websocket: true },
+            (connection: FastifyWebSocket, request: FastifyRequest) => {
+                connection.on('message', (payload: Buffer) =>
+                    messageHandler(connection, payload),
+                );
+                connection.on('close', () => exitHandler(connection));
+            },
+        );
+    } catch (err) {
+        throw new Error(`Websocket module setup failed ${err}`);
+    }
 }
 
 export function notifyApp(userId: string, message: object) {

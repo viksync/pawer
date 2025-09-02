@@ -18,7 +18,11 @@ export function setup(
     BOT_TOKEN = botToken;
     db = dbInstance;
 
-    fastify.post('/notify', notifyHandler);
+    try {
+        fastify.post('/notify', notifyHandler);
+    } catch (err) {
+        throw new Error(`Notifications module init failed ${err}`);
+    }
 }
 
 async function notifyHandler(request: FastifyRequest, reply: FastifyReply) {

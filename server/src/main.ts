@@ -1,123 +1,132 @@
 import fs from 'fs';
 import path from 'path';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import * as webSocket from './websocket.js';
 import * as userManagment from './user_managment.js';
 import * as notifications from './notifications.js';
 import { SqliteRepo, type UserRepository } from './db.js';
 import Database from 'better-sqlite3';
-// TODO: try middleware and limits
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) {
-    throw new Error('BOT_TOKEN required');
+type AppConfig = {
+    botToken: string;
+    publicUrl: string;
+    port: number;
+    dbDir: string;
+};
+
+async function main() {
+    let config: AppConfig;
+    let fastify: FastifyInstance;
+
+    try {
+        config = loadConfig();
+        await registerTelegramWebhook(config.botToken, config.publicUrl);
+        const userRepository = initDatabase(config.dbDir);
+        fastify = await createFastify();
+        setupAppModules(fastify, userRepository, config.botToken);
+    } catch (err) {
+        console.error('App initialization failed: ', err);
+        process.exit(1);
+    }
+
+    try {
+        await fastify.listen({ port: config.port, host: '0.0.0.0' });
+        // registerGracefulShutdown(fastify);
+    } catch (err) {
+        console.error(`Didn't start because: ${err}`);
+        process.exit(1);
+    }
 }
 
-const PORT = parseInt(process.env.PORT || '3333');
+main();
 
-async function createServer(userRepository: UserRepository, botToken: string) {
-    const fastify = Fastify({
-        logger: {
-            level: 'info',
-            transport: {
-                target: 'pino-pretty',
-                options: {
-                    colorize: true,
-                    translateTime: 'HH:MM:ss',
-                },
-            },
+function loadConfig(): AppConfig {
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) throw new Error('BOT_TOKEN not set');
+
+    const publicUrl = process.env.PUBLIC_URL;
+    if (!publicUrl) throw new Error('PUBLIC_URL not set');
+
+    const port = Number.parseInt(process.env.PORT || '3333', 10);
+    const dbDir = path.resolve('./db');
+
+    console.log('✅ Config loaded');
+    return { botToken, publicUrl, port, dbDir };
+}
+
+async function registerTelegramWebhook(botToken: string, publicUrl: string) {
+    const url = `${publicUrl}/webhook`;
+
+    const res = await fetch(
+        `https://api.telegram.org/bot${botToken}/setWebhook`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
         },
+    );
+
+    const data = await res.json();
+
+    if (!data.ok) {
+        throw new Error(
+            `Telegram API rejected webhook: ${JSON.stringify(data)}`,
+        );
+    }
+    console.log('✅ Telegram webhook registered:', url);
+}
+
+function initDatabase(dbDir: string) {
+    if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
+    }
+    const dbPath = path.join(dbDir, 'database.db');
+
+    const db = new Database(dbPath);
+    db.prepare(
+        `CREATE TABLE IF NOT EXISTS tg_user_bindings (
+            uid TEXT PRIMARY KEY,
+            chat_id TEXT NOT NULL
+        )`,
+    ).run();
+
+    console.log('✅ Database initialized');
+    return new SqliteRepo(db);
+}
+
+async function createFastify() {
+    const fastify = Fastify({
+        logger:
+            process.env.NODE_ENV === 'dev' ?
+                {
+                    level: 'info',
+                    transport: { target: 'pino-pretty' },
+                }
+            :   { level: 'info' },
     });
 
     await fastify.register(import('@fastify/websocket'));
-    webSocket.setup(fastify);
-    userManagment.setup(fastify, userRepository);
-    notifications.setup(fastify, userRepository, botToken);
 
     return fastify;
 }
 
-async function registerTgWebhook() {
-    const { BOT_TOKEN, PUBLIC_URL } = process.env;
-
-    if (!BOT_TOKEN || !PUBLIC_URL) {
-        console.error(
-            '❌ BOT_TOKEN or PUBLIC_URL not set, webhook registration failed',
-        );
-        throw new Error('Missing environment variables');
-    }
-
-    const url = `${PUBLIC_URL}/webhook`;
-
-    try {
-        const res = await fetch(
-            `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            },
-        );
-
-        const data = await res.json();
-
-        if (!data.ok) {
-            console.error('❌ Telegram webhook registration failed:', data);
-            throw new Error('Webhook registration failed');
-        }
-
-        console.log('✅ Telegram webhook registered:', url);
-    } catch (err) {
-        console.error('❌ Failed to register webhook:', err);
-        throw err;
-    }
+async function setupAppModules(
+    fastify: FastifyInstance,
+    userRepository: UserRepository,
+    botToken: string,
+) {
+    webSocket.setup(fastify);
+    userManagment.setup(fastify, userRepository);
+    notifications.setup(fastify, userRepository, botToken);
 }
 
-async function main() {
-    try {
-        await registerTgWebhook();
-    } catch {
-        process.exit(1);
-    }
-
-    const dbDir = path.resolve('./db'); // resolves relative to CWD, safe on Render
-
-    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-
-    const dbPath = path.join(dbDir, 'database.db');
-    const db = new Database(dbPath);
-    db.prepare(
-        `
-    CREATE TABLE IF NOT EXISTS tg_user_bindings (
-    uid TEXT PRIMARY KEY,
-    chat_id TEXT NOT NULL
-    )`,
-    ).run();
-
-    console.log('✅ Database ready!');
-    const userRepository = new SqliteRepo(db);
-    const fastify = await createServer(userRepository, BOT_TOKEN!);
-
-    try {
-        await fastify.listen({ port: PORT, host: '0.0.0.0' });
-
-        ['SIGTERM', 'SIGINT'].forEach((signal) => {
-            process.on(signal, () => {
-                fastify.log.info(
-                    `Received ${signal}, shutting down gracefully`,
-                );
-                fastify.close(() => {
-                    process.exit(0);
-                });
-            });
-        });
-    } catch (err) {
-        fastify.log.error(`Didn't start because: ${err}`);
-        process.exit(1);
-    }
-}
-
-main().catch((err) => {
-    console.error('Fatal error', err);
-    process.exit(1);
-});
+// function registerGracefulShutdown(
+//     fastify: Awaited<ReturnType<typeof createFastify>>,
+// ) {
+//     ['SIGTERM', 'SIGINT'].forEach((signal) => {
+//         process.on(signal, () => {
+//             fastify.log.info(`Received ${signal}, shutting down gracefully`);
+//             fastify.close(() => process.exit(0));
+//         });
+//     });
+// }

@@ -17,12 +17,19 @@ let db: UserRepository;
 export function setup(fastify: FastifyInstance, dbInstance: UserRepository) {
     db = dbInstance;
 
-    fastify.post('/webhook', webhookHandler);
-    fastify.get<{ Params: { uid: string } }>(
-        '/is_linked/:uid',
-        isLinkedHandler,
-    );
-    fastify.delete<{ Params: { uid: string } }>('/unlink/:uid', unlinkHandler);
+    try {
+        fastify.post('/webhook', webhookHandler);
+        fastify.get<{ Params: { uid: string } }>(
+            '/is_linked/:uid',
+            isLinkedHandler,
+        );
+        fastify.delete<{ Params: { uid: string } }>(
+            '/unlink/:uid',
+            unlinkHandler,
+        );
+    } catch (err) {
+        throw new Error(`User module init failed ${err}`);
+    }
 }
 
 async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
