@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import Fastify from 'fastify';
 import * as webSocket from './websocket.js';
 import * as userManagment from './user_managment.js';
@@ -33,7 +35,22 @@ async function createServer(userRepository: UserRepository, botToken: string) {
 }
 
 async function main() {
-    const db = new Database('./db/database.db');
+    const dbDir = path.resolve('./db'); // resolves relative to CWD, safe on Render
+
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+
+    const dbPath = path.join(dbDir, 'database.db');
+    const db = new Database(dbPath);
+    db.prepare(
+        `
+    CREATE TABLE IF NOT EXISTS tg_user_bindings (
+    uid TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL
+    )`,
+    ).run();
+
+    console.log('✅ Database ready!');
+    // const db = new Database('./db/database.db');
     const userRepository = new SqliteRepo(db);
     const fastify = await createServer(userRepository, BOT_TOKEN!);
 
