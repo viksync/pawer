@@ -37,7 +37,49 @@ async function createServer(userRepository: UserRepository, botToken: string) {
     return fastify;
 }
 
+async function registerTgWebhook() {
+    const { BOT_TOKEN, PUBLIC_URL } = process.env;
+
+    if (!BOT_TOKEN || !PUBLIC_URL) {
+        console.error(
+            '❌ BOT_TOKEN or PUBLIC_URL not set, webhook registration failed',
+        );
+        throw new Error('Missing environment variables');
+    }
+
+    const url = `${PUBLIC_URL}/webhook`;
+
+    try {
+        const res = await fetch(
+            `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            },
+        );
+
+        const data = await res.json();
+
+        if (!data.ok) {
+            console.error('❌ Telegram webhook registration failed:', data);
+            throw new Error('Webhook registration failed');
+        }
+
+        console.log('✅ Telegram webhook registered:', url);
+    } catch (err) {
+        console.error('❌ Failed to register webhook:', err);
+        throw err;
+    }
+}
+
 async function main() {
+    try {
+        await registerTgWebhook();
+    } catch {
+        process.exit(1);
+    }
+
     const dbDir = path.resolve('./db'); // resolves relative to CWD, safe on Render
 
     if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -53,7 +95,6 @@ async function main() {
     ).run();
 
     console.log('✅ Database ready!');
-    // const db = new Database('./db/database.db');
     const userRepository = new SqliteRepo(db);
     const fastify = await createServer(userRepository, BOT_TOKEN!);
 
