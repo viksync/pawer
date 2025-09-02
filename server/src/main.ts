@@ -1,17 +1,13 @@
-import fs from 'fs';
-import path from 'path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import * as webSocket from './websocket.js';
 import * as userManagment from './user_managment.js';
 import * as notifications from './notifications.js';
-import { SqliteRepo, type UserRepository } from './db.js';
-import Database from 'better-sqlite3';
+import { createUserRepository, type UserRepository } from './db.js';
 
 type AppConfig = {
     botToken: string;
     publicUrl: string;
     port: number;
-    dbDir: string;
 };
 
 async function main() {
@@ -21,7 +17,7 @@ async function main() {
     try {
         config = loadConfig();
         await registerTelegramWebhook(config.botToken, config.publicUrl);
-        const userRepository = initDatabase(config.dbDir);
+        const userRepository = createUserRepository();
         fastify = await createFastify();
         setupAppModules(fastify, userRepository, config.botToken);
     } catch (err) {
@@ -48,10 +44,9 @@ function loadConfig(): AppConfig {
     if (!publicUrl) throw new Error('PUBLIC_URL not set');
 
     const port = Number.parseInt(process.env.PORT || '3333', 10);
-    const dbDir = path.resolve('./db');
 
     console.log('✅ Config loaded');
-    return { botToken, publicUrl, port, dbDir };
+    return { botToken, publicUrl, port };
 }
 
 async function registerTelegramWebhook(botToken: string, publicUrl: string) {
@@ -76,24 +71,6 @@ async function registerTelegramWebhook(botToken: string, publicUrl: string) {
     console.log('✅ Telegram webhook registered:', url);
 }
 
-function initDatabase(dbDir: string) {
-    if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
-    }
-    const dbPath = path.join(dbDir, 'database.db');
-
-    const db = new Database(dbPath);
-    db.prepare(
-        `CREATE TABLE IF NOT EXISTS tg_user_bindings (
-            uid TEXT PRIMARY KEY,
-            chat_id TEXT NOT NULL
-        )`,
-    ).run();
-
-    console.log('✅ Database initialized');
-    return new SqliteRepo(db);
-}
-
 async function createFastify() {
     const fastify = Fastify({
         logger:
@@ -104,8 +81,10 @@ async function createFastify() {
                 }
             :   { level: 'info' },
     });
+    console.log('✅ Fastify instance created');
 
     await fastify.register(import('@fastify/websocket'));
+    console.log('✅ Fastify websocket registered');
 
     return fastify;
 }
@@ -116,8 +95,13 @@ async function setupAppModules(
     botToken: string,
 ) {
     webSocket.setup(fastify);
+    console.log('✅ Websocket module initialized');
+
     userManagment.setup(fastify, userRepository);
+    console.log('✅ Users module initialized');
+
     notifications.setup(fastify, userRepository, botToken);
+    console.log('✅ Notifications module initialized');
 }
 
 // function registerGracefulShutdown(
