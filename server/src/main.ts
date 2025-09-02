@@ -17,13 +17,16 @@ const PORT = parseInt(process.env.PORT || '3333');
 
 async function createServer(userRepository: UserRepository, botToken: string) {
     const fastify = Fastify({
-        logger:
-            process.env.NODE_ENV === 'production' ?
-                { level: 'warn' }
-            :   {
-                    level: 'info',
-                    transport: { target: 'pino-pretty' },
+        logger: {
+            level: 'info',
+            transport: {
+                target: 'pino-pretty',
+                options: {
+                    colorize: true,
+                    translateTime: 'HH:MM:ss',
                 },
+            },
+        },
     });
 
     await fastify.register(import('@fastify/websocket'));
