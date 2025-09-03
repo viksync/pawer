@@ -118,14 +118,6 @@ struct SettingsView: View {
                         }
                     }
                     
-                    if tgBinding.linkedStatus == .unknown {
-                        Text("Checking Linking")
-                    }
-                    
-                    if tgBinding.linkedStatus == .error {
-                        Text("Error while checking linking")
-                    }
-                    
                 }
                 .padding(.bottom, 10)
             }

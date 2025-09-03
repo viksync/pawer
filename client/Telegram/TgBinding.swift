@@ -3,29 +3,26 @@ import Foundation
 class TgBinding: ObservableObject {
     static let shared = TgBinding()
 
-    let webhookBaseURL = "tight-constantly-gibbon.ngrok-free.app"
+    let webhookBaseURL = "pawer-server.onrender.com"
     private let botUsername = "pawerapp_bot"
     let botLinkURL: URL?
     let uniqueID: String
+    @Published var chatID: String?
 
     enum LinkedStatus {
-        case unknown
         case linked
         case unlinked
-        case error
     }
-    @Published var linkedStatus: LinkedStatus = .unknown
+
+    var linkedStatus: LinkedStatus {
+        chatID != nil ? .linked : .unlinked 
+    }
 
     enum ConnectionState {
       case idle
       case waitingForTelegram
       case failed
     }
-    enum UnlinkResult {
-        case success
-        case failed
-    }
-    @Published var unlinkResult: UnlinkResult?
 
     private var webSocketTask: URLSessionWebSocketTask?
     @Published var connectionState: ConnectionState = .idle
@@ -33,8 +30,8 @@ class TgBinding: ObservableObject {
 
     private init() {
         self.uniqueID = TgBinding.getOrCreateUniqueID()
+        self.chatID = UserDefaults.standard.string(forKey: "telegram_chat_id")
         self.botLinkURL = URL(string: "https://t.me/\(botUsername)?start=\(uniqueID)")
-        checkLinkingStatus()
     }
 
     private static func getOrCreateUniqueID() -> String {
@@ -50,7 +47,7 @@ class TgBinding: ObservableObject {
     }
 
     func connectWebSocket() {
-        let wsURL = URL(string: "wss://\(webhookBaseURL)/ws")!
+        let wsURL = URL(string: "wss://\(webhookBaseURL)/websocket")!
 
         webSocketTask = URLSession.shared.webSocketTask(with: wsURL)
         webSocketTask?.resume()
@@ -81,18 +78,18 @@ class TgBinding: ObservableObject {
             case .string(let text):
                 print("📡 Received: \(text)")
 
-                if text.contains("\"type\":\"listening_confirmed\"") {
+                if text == "server_waiting" {
                     DispatchQueue.main.async {
                         self.connectionState = .waitingForTelegram
                     }
                     return
                 } 
                 
-               if text.contains("\"type\":\"linked\"") {
+               if text.hasPrefix("linked_chatId:") {
                     DispatchQueue.main.async {
-                        self.linkedStatus = .linked
+                        self.chatID = String(text.dropFirst(14))
                         self.connectionState = .idle
-                        UserDefaults.standard.set(true, forKey: "is_telegram_linked")
+                        UserDefaults.standard.set(self.chatID, forKey: "telegram_chat_id")
 
                         self.webSocketTask?.cancel(with: .goingAway, reason: nil)
                         self.webSocketTask = nil
@@ -109,99 +106,22 @@ class TgBinding: ObservableObject {
     }
 
     private func sendRegistrationMessage() {
-        let message = ["type": "listen_for_link", "unique_id": uniqueID]
+        let message = "register:\(uniqueID)"
+        let wsMessage = URLSessionWebSocketTask.Message.string(message)
 
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: message)
-            let jsonString = String(data: jsonData, encoding: .utf8)!
-
-            let wsMessage = URLSessionWebSocketTask.Message.string(jsonString)
-
-            webSocketTask?.send(wsMessage) { error in
-                if let error = error {
-                    print("❌ Failed to send registration: \(error)")
-                    DispatchQueue.main.async {
-                        self.connectionState = .failed
-                    }
-                } else {
-                    print("✅ Registration sent successfully")
-              }
-            }
-        } catch {
-            print("❌ JSON serialization failed: \(error)")
-            DispatchQueue.main.async {
-                self.connectionState = .failed
+        webSocketTask?.send(wsMessage) { error in
+            if let error = error {
+                print("❌ Failed to send registration: \(error)")
+                DispatchQueue.main.async {
+                    self.connectionState = .failed
+                }
+            } else {
+                print("✅ Registration sent successfully")
             }
         }
     }
 
     func unlinkTelegram() {
-        let url = URL(string: "https://\(webhookBaseURL)/unlink/\(uniqueID)")!
-
-        var request = URLRequest (url: url)
-        request.httpMethod = "DELETE"
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    self.unlinkResult = .failed
-                    print("unlinkTelegram: \(error)")
-                }
-                return
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    self.unlinkResult = .failed
-                }
-                return
-            }
-
-            DispatchQueue.main.async {
-                if httpResponse.statusCode == 204 {
-                    self.unlinkResult = .success
-                    self.linkedStatus = .unlinked
-                    UserDefaults.standard.set(false, forKey: "is_telegram_linked")
-                } else {
-                    self.unlinkResult = .failed
-                }
-            }
-        }.resume()
+        self.chatID = nil
     }
-
-    func checkLinkingStatus() {
-        let url = URL(string: "https://\(webhookBaseURL)/is_linked/\(uniqueID)")!
-
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    print("checkLinkingStatus: \(error)")
-                    self.linkedStatus = .error
-                }
-                return
-            }
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                DispatchQueue.main.async {
-                    self.linkedStatus = .error
-                }
-                return
-            }
-
-            DispatchQueue.main.async {
-                switch httpResponse.statusCode {
-                case 200:
-                    self.linkedStatus = .linked
-                    UserDefaults.standard.set(true, forKey: "is_telegram_linked")
-                case 404:
-                    self.linkedStatus = .unlinked
-                    UserDefaults.standard.set(false, forKey: "is_telegram_linked")
-                default:
-                    self.linkedStatus = .error
-                    print("❌ DEBUG: Unexpected status code: \(httpResponse.statusCode)")
-                }
-            }
-        }.resume()
-    }
-
-}
+ }

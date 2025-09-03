@@ -3,23 +3,10 @@ import Foundation
 class TgNotifications {
     static let shared = TgNotifications()
 
-    private init() {
-
-    }
-
     func sendBatteryAlert(batteryLevel: Int) {
-        print("🔍 DEBUG: Current linkedStatus: \(TgBinding.shared.linkedStatus)")
-        print("🔍 DEBUG: UserDefaults is_telegram_linked: \(UserDefaults.standard.bool(forKey: "is_telegram_linked"))")
-        print("🔍 DEBUG: UserDefaults isTelegramEnabled: \(UserDefaults.standard.bool(forKey: "isTelegramEnabled"))")
-        print("🔍 DEBUG: uniqueID: \(TgBinding.shared.uniqueID)")
         
-        guard TgBinding.shared.linkedStatus == .linked || UserDefaults.standard.bool(forKey: "is_telegram_linked") else {
+        guard let chatID = TgBinding.shared.chatID else {
             print("❌ Telegram not linked, skipping notification (status: \(TgBinding.shared.linkedStatus))")
-            return
-        }
-
-        guard UserDefaults.standard.bool(forKey: "isTelegramEnabled") else {
-            print("❌ Telegram notifications disabled in settings")
             return
         }
 
@@ -32,7 +19,7 @@ class TgNotifications {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
         let payload = [
-            "unique_id": TgBinding.shared.uniqueID,
+            "chat_id": TgBinding.shared.chatID,
             "message": message
         ]
 
