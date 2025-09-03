@@ -1,11 +1,5 @@
-import { z } from 'zod';
 import type { WebSocket as FastifyWebSocket } from '@fastify/websocket';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
-
-const registrationSchema = z.object({
-    type: z.string(),
-    unique_id: z.string(),
-});
+import type { FastifyInstance } from 'fastify';
 
 interface Connection {
     socket: FastifyWebSocket;
@@ -17,26 +11,26 @@ const activeConnections = new Map<string, Connection>();
 export function setup(fastifyInstance: FastifyInstance) {
     try {
         fastifyInstance.get(
-            '/ws',
+            '/websocket',
             { websocket: true },
-            (connection: FastifyWebSocket, request: FastifyRequest) => {
+            (connection: FastifyWebSocket) => {
                 connection.on('message', (payload: Buffer) =>
-                    messageHandler(connection, payload),
+                    registerHandler(connection, payload),
                 );
                 connection.on('close', () => exitHandler(connection));
             },
         );
     } catch (err) {
-        throw new Error(`Websocket module setup failed ${err}`);
+        throw new Error(`Websocket module setup failed: ${err}`);
     }
 }
 
-export function notifyApp(userId: string, message: object) {
-    const connection = activeConnections.get(userId);
-    if (connection) {
+export function notifyApp(userId: string, message: string) {
+    const socket = activeConnections.get(userId)?.socket;
+    if (socket) {
         try {
-            connection.socket.send(JSON.stringify(message));
-            connection.socket.close(1000, 'Registration complete');
+            socket.send(message);
+            socket.close(1000, 'Registration complete');
             activeConnections.delete(userId);
         } catch (error) {
             console.error(error);
@@ -44,37 +38,21 @@ export function notifyApp(userId: string, message: object) {
     }
 }
 
-function messageHandler(connection: FastifyWebSocket, payload: Buffer) {
-    try {
-        const message = payload.toString();
-        const data = registrationSchema.parse(JSON.parse(message));
-
-        if (!(data.type === 'listen_for_link')) {
-            connection.close(1003, 'Invalid message format');
-            return;
-        }
-
-        activeConnections.set(data.unique_id, {
-            socket: connection,
-            lastSeen: Date.now(),
-        });
-
-        connection.send(
-            JSON.stringify({
-                type: 'listening_confirmed',
-                unique_id: data.unique_id,
-            }),
-        );
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            console.error(error);
-            connection.close(1003, 'Invalid message format');
-            return;
-        }
-
-        console.error(error);
-        connection.close(1002, 'Json error');
+function registerHandler(connection: FastifyWebSocket, payload: Buffer) {
+    const message = payload.toString();
+    if (!message.startsWith('register:')) {
+        connection.close(1003, 'Invalid message format');
+        return;
     }
+
+    const unique_id = message.substring(9);
+
+    activeConnections.set(unique_id, {
+        socket: connection,
+        lastSeen: Date.now(),
+    });
+
+    connection.send('server_waiting');
 }
 
 function exitHandler(connection: FastifyWebSocket) {

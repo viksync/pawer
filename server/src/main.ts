@@ -1,8 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import * as webSocket from './websocket.js';
-import * as userManagment from './user_managment.js';
+import * as websocket from './websocket.js';
+import * as webhook from './webhook.js';
 import * as notifications from './notifications.js';
-import { createUserRepository, type UserRepository } from './db.js';
 
 type AppConfig = {
     botToken: string;
@@ -17,9 +16,8 @@ async function main() {
     try {
         config = loadConfig();
         await registerTelegramWebhook(config.botToken, config.publicUrl);
-        const userRepository = createUserRepository();
         fastify = await createFastify();
-        setupAppModules(fastify, userRepository, config.botToken);
+        setupAppModules(fastify, config.botToken);
     } catch (err) {
         console.error('App initialization failed: ', err);
         process.exit(1);
@@ -27,7 +25,7 @@ async function main() {
 
     try {
         await fastify.listen({ port: config.port, host: '0.0.0.0' });
-        // registerGracefulShutdown(fastify);
+        registerGracefulShutdown(fastify);
     } catch (err) {
         console.error(`Didn't start because: ${err}`);
         process.exit(1);
@@ -89,28 +87,22 @@ async function createFastify() {
     return fastify;
 }
 
-async function setupAppModules(
-    fastify: FastifyInstance,
-    userRepository: UserRepository,
-    botToken: string,
-) {
-    webSocket.setup(fastify);
+async function setupAppModules(fastify: FastifyInstance, botToken: string) {
+    websocket.setup(fastify);
     console.log('✅ Websocket module initialized');
 
-    userManagment.setup(fastify, userRepository);
-    console.log('✅ Users module initialized');
+    webhook.setup(fastify);
+    console.log('✅ Webhook module initialized');
 
-    notifications.setup(fastify, userRepository, botToken);
+    notifications.setup(fastify, botToken);
     console.log('✅ Notifications module initialized');
 }
 
-// function registerGracefulShutdown(
-//     fastify: Awaited<ReturnType<typeof createFastify>>,
-// ) {
-//     ['SIGTERM', 'SIGINT'].forEach((signal) => {
-//         process.on(signal, () => {
-//             fastify.log.info(`Received ${signal}, shutting down gracefully`);
-//             fastify.close(() => process.exit(0));
-//         });
-//     });
-// }
+function registerGracefulShutdown(fastify: FastifyInstance) {
+    ['SIGTERM', 'SIGINT'].forEach((signal) => {
+        process.on(signal, () => {
+            fastify.log.info(`Received ${signal}, shutting down gracefully`);
+            fastify.close(() => process.exit(0));
+        });
+    });
+}

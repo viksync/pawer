@@ -1,22 +1,15 @@
 import { z } from 'zod';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { UserRepository } from './db.js';
 
 const NotificationRequestScheme = z.object({
-    unique_id: z.string(),
+    chat_id: z.string(),
     message: z.string(),
 });
 
 let BOT_TOKEN: string;
-let db: UserRepository;
 
-export function setup(
-    fastify: FastifyInstance,
-    dbInstance: UserRepository,
-    botToken: string,
-) {
+export function setup(fastify: FastifyInstance, botToken: string) {
     BOT_TOKEN = botToken;
-    db = dbInstance;
 
     try {
         fastify.post('/notify', notifyHandler);
@@ -29,18 +22,13 @@ async function notifyHandler(request: FastifyRequest, reply: FastifyReply) {
     try {
         const data = NotificationRequestScheme.parse(request.body);
 
-        const result = await db.findUser(data.unique_id);
-        if (!result) {
-            return reply.code(404).send('UUID Not Found');
-        }
-
         const telegramResponse = await fetch(
             `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
             {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chat_id: result.chat_id,
+                    chat_id: data.chat_id,
                     text: data.message,
                 }),
             },
