@@ -1,0 +1,7 @@
+{
+  "[swift]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
+  },
+  "sweetpad.build.xcodeWorkspacePath": "Pawer.xcodeproj/project.xcworkspace"
+}
