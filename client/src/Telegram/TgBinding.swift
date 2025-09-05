@@ -3,35 +3,37 @@ import Foundation
 class TgBinding: ObservableObject {
     static let shared = TgBinding()
 
-    let webhookBaseURL = "pawer-server.onrender.com"
-    private let botUsername = "pawerapp_bot"
-    let botLinkURL: URL?
-    let uniqueID: String
-    @Published var chatID: String?
-
     enum LinkedStatus {
         case linked
         case unlinked
     }
 
+    enum ConnectionState {
+        case idle
+        case waitingForTelegram
+        case failed
+    }
+
+    let botLinkURL: URL?
+
+    @Published var connectionState: ConnectionState = .idle
+    @Published var chatID: String?
+
     var linkedStatus: LinkedStatus {
         chatID != nil ? .linked : .unlinked 
     }
 
-    enum ConnectionState {
-      case idle
-      case waitingForTelegram
-      case failed
-    }
-
+    private let botUsername = "pawerapp_bot"
+    private let webhookBaseURL = "pawer-server.onrender.com"
+    private let wsURL: URL
+    private let uniqueID: String
     private var webSocketTask: URLSessionWebSocketTask?
-    @Published var connectionState: ConnectionState = .idle
-
 
     private init() {
         self.uniqueID = TgBinding.getOrCreateUniqueID()
         self.chatID = UserDefaults.standard.string(forKey: "telegram_chat_id")
         self.botLinkURL = URL(string: "https://t.me/\(botUsername)?start=\(uniqueID)")
+        self.wsURL = URL(string: "wss://\(webhookBaseURL)/websocket")!
     }
 
     private static func getOrCreateUniqueID() -> String {
@@ -47,15 +49,15 @@ class TgBinding: ObservableObject {
     }
 
     func connectWebSocket() {
-        let wsURL = URL(string: "wss://\(webhookBaseURL)/websocket")!
-
         webSocketTask = URLSession.shared.webSocketTask(with: wsURL)
-        webSocketTask?.resume()
         receiveWebSocketMessage()
-
+        webSocketTask?.resume()
         print("WebSocket connecting to: \(wsURL)")
-
         sendRegistrationMessage()
+    }
+
+    func unlinkTelegram() {
+        self.chatID = nil
     }
 
     private func receiveWebSocketMessage() {
@@ -65,9 +67,10 @@ class TgBinding: ObservableObject {
                     self.handleWebSocketMessage(message)
                     self.receiveWebSocketMessage()
                 case .failure(let error):
-                    print("WebSocket receive error: \(error)")
+                    print("WebSocket error: \(error)")
                     DispatchQueue.main.async {
                         self.connectionState = .failed
+                        disconnect()
                     }
             }
         }
@@ -91,9 +94,7 @@ class TgBinding: ObservableObject {
                         self.connectionState = .idle
                         UserDefaults.standard.set(self.chatID, forKey: "telegram_chat_id")
 
-                        self.webSocketTask?.cancel(with: .goingAway, reason: nil)
-                        self.webSocketTask = nil
-                        print("🔌 WebSocket disconnected")
+                        disconnect()
                     }
                     return
                 }
@@ -114,6 +115,7 @@ class TgBinding: ObservableObject {
                 print("❌ Failed to send registration: \(error)")
                 DispatchQueue.main.async {
                     self.connectionState = .failed
+                    disconnect()
                 }
             } else {
                 print("✅ Registration sent successfully")
@@ -121,7 +123,9 @@ class TgBinding: ObservableObject {
         }
     }
 
-    func unlinkTelegram() {
-        self.chatID = nil
+    private func disconnect() {
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        print("🔌 WebSocket disconnected")
     }
  }
