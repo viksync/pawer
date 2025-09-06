@@ -42,7 +42,11 @@ async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
         return reply.code(200).send('OK');
     }
 
-    webSocket.notifyApp(uid, `linked_chatId:${chatId}`);
+    try {
+        webSocket.notifyApp(uid, `linked_chatId:${chatId}`);
+    } catch (err) {
+        console.error('Failed to send chat_id back', err);
+    }
 
     return reply.code(200).send('OK');
 }

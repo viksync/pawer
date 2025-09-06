@@ -1,12 +1,8 @@
 import type { WebSocket as FastifyWebSocket } from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
+import { ConnectionManager } from './connectionManager.js';
 
-interface Connection {
-    socket: FastifyWebSocket;
-    lastSeen: number;
-}
-
-const activeConnections = new Map<string, Connection>();
+const activeConnections = new ConnectionManager();
 
 export function setup(fastifyInstance: FastifyInstance) {
     try {
@@ -15,9 +11,10 @@ export function setup(fastifyInstance: FastifyInstance) {
             { websocket: true },
             (connection: FastifyWebSocket) => {
                 connection.on('message', (payload: Buffer) =>
-                    registerHandler(connection, payload),
+                    processMessage(connection, payload),
                 );
-                connection.on('close', () => exitHandler(connection));
+                connection.on('close', () => cleanupConnection(connection));
+                connection.on('error', () => cleanupConnection(connection));
             },
         );
     } catch (err) {
@@ -25,41 +22,49 @@ export function setup(fastifyInstance: FastifyInstance) {
     }
 }
 
-export function notifyApp(userId: string, message: string) {
-    const socket = activeConnections.get(userId)?.socket;
+export function notifyApp(uid: string, message: string) {
+    const socket = activeConnections.get(uid);
+
     if (socket) {
         try {
             socket.send(message);
-            socket.close(1000, 'Registration complete');
-            activeConnections.delete(userId);
-        } catch (error) {
-            console.error(error);
+        } catch (err) {
+            activeConnections.delete(uid);
+            throw err;
         }
     }
 }
 
-function registerHandler(connection: FastifyWebSocket, payload: Buffer) {
-    const message = payload.toString();
-    if (!message.startsWith('register:')) {
-        connection.close(1003, 'Invalid message format');
-        return;
+function processMessage(connection: FastifyWebSocket, payload: Buffer) {
+    try {
+        const message = payload.toString();
+
+        if (message.startsWith('link_uid:'))
+            initiateTelegramLinking(connection, message);
+
+        if (message === 'success') {
+            activeConnections.delete(connection);
+            connection.close(1000, 'OK');
+        }
+    } catch (err) {
+        console.error('Error processing ws message', err);
     }
-
-    const unique_id = message.substring(9);
-
-    activeConnections.set(unique_id, {
-        socket: connection,
-        lastSeen: Date.now(),
-    });
-
-    connection.send('server_waiting');
 }
 
-function exitHandler(connection: FastifyWebSocket) {
-    for (const [key, value] of activeConnections) {
-        if (value.socket === connection) {
-            activeConnections.delete(key);
-            break;
-        }
+function initiateTelegramLinking(
+    connection: FastifyWebSocket,
+    message: string,
+) {
+    const uid = message.substring(9);
+    activeConnections.set(connection, uid);
+    try {
+        connection.send('server_waiting');
+    } catch (err) {
+        console.error('Failed to initiate telegram linking', err);
+        activeConnections.delete(connection);
     }
+}
+
+function cleanupConnection(connection: FastifyWebSocket) {
+    activeConnections.delete(connection);
 }

@@ -23,8 +23,15 @@ class TgBinding: ObservableObject {
         chatID != nil ? .linked : .unlinked 
     }
 
+    let webhookBaseURL: String = {
+        #if DEBUG
+        return "tight-constantly-gibbon.ngrok-free.app"
+        #else
+        return "pawer-server.onrender.com"
+        #endif
+    }()
+
     private let botUsername = "pawerapp_bot"
-    private let webhookBaseURL = "pawer-server.onrender.com"
     private let wsURL: URL
     private let uniqueID: String
     private var webSocketTask: URLSessionWebSocketTask?
@@ -70,7 +77,7 @@ class TgBinding: ObservableObject {
                     print("WebSocket error: \(error)")
                     DispatchQueue.main.async {
                         self.connectionState = .failed
-                        disconnect()
+                        self.disconnect()
                     }
             }
         }
@@ -94,7 +101,10 @@ class TgBinding: ObservableObject {
                         self.connectionState = .idle
                         UserDefaults.standard.set(self.chatID, forKey: "telegram_chat_id")
 
-                        disconnect()
+                        let successMessage = URLSessionWebSocketTask.Message.string("success")
+                        self.webSocketTask?.send(successMessage) {
+                            _ in self.disconnect()
+                        }
                     }
                     return
                 }
@@ -107,7 +117,7 @@ class TgBinding: ObservableObject {
     }
 
     private func sendRegistrationMessage() {
-        let message = "register:\(uniqueID)"
+        let message = "link_uid:\(uniqueID)"
         let wsMessage = URLSessionWebSocketTask.Message.string(message)
 
         webSocketTask?.send(wsMessage) { error in
@@ -115,7 +125,7 @@ class TgBinding: ObservableObject {
                 print("❌ Failed to send registration: \(error)")
                 DispatchQueue.main.async {
                     self.connectionState = .failed
-                    disconnect()
+                    self.disconnect()
                 }
             } else {
                 print("✅ Registration sent successfully")
