@@ -6,10 +6,10 @@ const NotificationRequestScheme = z.object({
     message: z.string(),
 });
 
-let BOT_TOKEN: string;
+let TELEGRAM_API_URL: string;
 
 export function setup(fastify: FastifyInstance, botToken: string) {
-    BOT_TOKEN = botToken;
+    TELEGRAM_API_URL = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
     try {
         fastify.post('/notify', notifyHandler);
@@ -22,17 +22,14 @@ async function notifyHandler(request: FastifyRequest, reply: FastifyReply) {
     try {
         const data = NotificationRequestScheme.parse(request.body);
 
-        const telegramResponse = await fetch(
-            `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: data.chat_id,
-                    text: data.message,
-                }),
-            },
-        );
+        const telegramResponse = await fetch(TELEGRAM_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: data.chat_id,
+                text: data.message,
+            }),
+        });
 
         if (!telegramResponse.ok) {
             return reply.code(502).send('Telegram API error');
