@@ -91,7 +91,7 @@ async function setupAppModules(fastify: FastifyInstance, botToken: string) {
     websocket.setup(fastify);
     console.log('✅ Websocket module initialized');
 
-    webhook.setup(fastify);
+    webhook.setup(fastify, websocket.notifyApp);
     console.log('✅ Webhook module initialized');
 
     notifications.setup(fastify, botToken);

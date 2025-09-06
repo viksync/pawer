@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import * as webSocket from './websocket.js';
 
 const TgWebhookScheme = z.object({
     message: z.object({
@@ -11,15 +10,23 @@ const TgWebhookScheme = z.object({
     }),
 });
 
-export function setup(fastify: FastifyInstance) {
+type NotifyAppFunction = (uid: string, msg: string) => void;
+
+export function setup(fastify: FastifyInstance, notifyApp: NotifyAppFunction) {
     try {
-        fastify.post('/webhook', webhookHandler);
+        fastify.post('/webhook', (req, rep) =>
+            webhookHandler(req, rep, notifyApp),
+        );
     } catch (err) {
-        throw new Error(`User module init failed ${err}`);
+        throw new Error(`Webhook module init failed ${err}`);
     }
 }
 
-async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
+async function webhookHandler(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    notifyApp: NotifyAppFunction,
+) {
     let data;
     try {
         data = TgWebhookScheme.parse(request.body);
@@ -43,7 +50,7 @@ async function webhookHandler(request: FastifyRequest, reply: FastifyReply) {
     }
 
     try {
-        webSocket.notifyApp(uid, `linked_chatId:${chatId}`);
+        notifyApp(uid, `linked_chatId:${chatId}`);
     } catch (err) {
         console.error('Failed to send chat_id back', err);
     }
