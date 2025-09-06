@@ -15,7 +15,7 @@ if curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -q "public_url";
     echo "⚠️  Ngrok is already running!"
     NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
     echo "🔗 Current tunnel: $NGROK_URL"
-    echo "Use ./restart_server.sh to restart just the server"
+    echo "Use ./restart to restart just the server"
     exit 0
 fi
 

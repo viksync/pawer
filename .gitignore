@@ -5,5 +5,5 @@ node_modules/
 *.temp
 *.log
 *.bak
-todo
-notes
+/*.md
+!/README.md

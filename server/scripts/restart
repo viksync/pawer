@@ -8,13 +8,25 @@ echo "🔄 Restarting Node.js server..."
 # Check if ngrok is running
 if ! curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -q "public_url"; then
     echo "❌ Ngrok is not running!"
-    echo "Run ./setup_ngrok.sh first to set up the tunnel"
+    echo "Run ./tunnel first to set up the tunnel"
     exit 1
 fi
 
 # Get current ngrok URL
 NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o '"public_url":"https://[^"]*' | head -1 | sed 's/"public_url":"//' 2>/dev/null || echo "")
 echo "🔗 Using ngrok tunnel: $NGROK_URL"
+
+# Set PUBLIC_URL if not already set
+if [ -z "$PUBLIC_URL" ]; then
+    export PUBLIC_URL="$NGROK_URL"
+    echo "📌 PUBLIC_URL set to: $PUBLIC_URL"
+else
+    echo "📌 PUBLIC_URL already set to: $PUBLIC_URL"
+fi
+
+# Set NODE_ENV to dev
+export NODE_ENV="dev"
+echo "🔧 NODE_ENV set to: $NODE_ENV"
 
 # Kill any existing server process
 echo "🛑 Stopping existing server..."
