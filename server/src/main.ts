@@ -16,7 +16,7 @@ async function main() {
     try {
         config = loadConfig();
         await retryTillComplete(
-            registerTelegramWebhook,
+            webhook.register,
             30,
             config.botToken,
             config.publicUrl,
@@ -50,72 +50,6 @@ function loadConfig(): AppConfig {
 
     console.log('✅ Config loaded');
     return { botToken, publicUrl, port };
-}
-
-async function retryTillComplete<T extends readonly unknown[]>(
-    task: (...args: T) => Promise<void>,
-    maxTimeoutSec: number = 30,
-    ...args: T
-) {
-    let attempt = 1;
-    let timeout: number;
-
-    while (true) {
-        try {
-            await task(...args);
-            return;
-        } catch {
-            console.warn(
-                `${task.name || 'Task'} failed, retrying. Attempt: ${attempt}`,
-            );
-            timeout = Math.pow(2, attempt - 1);
-            if (timeout > maxTimeoutSec) timeout = maxTimeoutSec;
-            await new Promise((resolve) => setTimeout(resolve, timeout * 1000));
-            attempt++;
-        }
-    }
-}
-
-async function registerTelegramWebhook(botToken: string, publicUrl: string) {
-    const url = `${publicUrl}/webhook`;
-
-    try {
-        const currentWebhook = await fetch(
-            `https://api.telegram.org/bot${botToken}/getWebhookInfo`,
-        );
-        const currentWebhookData = await currentWebhook.json();
-
-        if (currentWebhookData.result?.url === url) {
-            console.log('✅ Webhook already registered:', url);
-            return;
-        }
-    } catch (err) {
-        console.warn('Failed to get current webhook status: ', err);
-    }
-
-    try {
-        const res = await fetch(
-            `https://api.telegram.org/bot${botToken}/setWebhook`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
-            },
-        );
-
-        const data = await res.json();
-
-        if (!data.ok) {
-            throw new Error(
-                `Telegram API rejected webhook: ${JSON.stringify(data)}`,
-            );
-        }
-
-        console.log('✅ Telegram webhook registered:', url);
-    } catch (err) {
-        console.error('Telegram webhook registration failed: ', err);
-        throw err;
-    }
 }
 
 async function createFastify() {
@@ -154,4 +88,28 @@ function registerGracefulShutdown(fastify: FastifyInstance) {
             fastify.close(() => process.exit(0));
         });
     });
+}
+
+async function retryTillComplete<T extends readonly unknown[]>(
+    task: (...args: T) => Promise<void>,
+    maxTimeoutSec: number = 30,
+    ...args: T
+) {
+    let attempt = 1;
+    let timeout: number;
+
+    while (true) {
+        try {
+            await task(...args);
+            return;
+        } catch {
+            console.warn(
+                `${task.name || 'Task'} failed, retrying. Attempt: ${attempt}`,
+            );
+            timeout = Math.pow(2, attempt - 1);
+            if (timeout > maxTimeoutSec) timeout = maxTimeoutSec;
+            await new Promise((resolve) => setTimeout(resolve, timeout * 1000));
+            attempt++;
+        }
+    }
 }

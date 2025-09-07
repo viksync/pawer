@@ -22,6 +22,48 @@ export function setup(fastify: FastifyInstance, notifyApp: NotifyAppFunction) {
     }
 }
 
+export async function register(botToken: string, publicUrl: string) {
+    const url = `${publicUrl}/webhook`;
+
+    try {
+        const currentWebhook = await fetch(
+            `https://api.telegram.org/bot${botToken}/getWebhookInfo`,
+        );
+        const currentWebhookData = await currentWebhook.json();
+
+        if (currentWebhookData.result?.url === url) {
+            console.log('✅ Webhook already registered:', url);
+            return;
+        }
+    } catch (err) {
+        console.warn('Failed to get current webhook status: ', err);
+    }
+
+    try {
+        const res = await fetch(
+            `https://api.telegram.org/bot${botToken}/setWebhook`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            },
+        );
+
+        const data = await res.json();
+
+        if (!data.ok) {
+            throw new Error(
+                `Telegram API rejected webhook: ${JSON.stringify(data)}`,
+            );
+        }
+
+        console.log('✅ Telegram webhook registered:', url);
+    } catch (err) {
+        console.error('Telegram webhook registration failed: ', err);
+        throw err;
+    }
+}
+
 async function webhookHandler(
     request: FastifyRequest,
     reply: FastifyReply,
